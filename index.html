@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<!--
+  URL → Пакет: тест на знание сетевого стека
+  Версия: v1.4
+  Дата: 2026-06-21
+  Changelog:
+    v1.4 — исправлены ошибки: экранированы <script>/<meta> в тексте вопросов,
+           добавлена защита от двойного клика в choose(), null-guard для classList.
+    v1.3 — возвращены 6 вопросов по TCP SYN, OSI L2/L3, инкапсуляции,
+           IPv4-заголовку, байтам IPv4/IPv6, Anycast. Пул: 46 вопросов.
+    v1.2 — пересмотр пула под стек web/security: удалены 16 low-level сетевых
+           вопросов, добавлены 14 новых по HTTP-методам, заголовкам, Cookie/JWT/OAuth,
+           CORS, клиент-серверной архитектуре, JS-разведке. Глоссарий расширен до 57 терминов.
+    v1.1 — исправлен вопрос про инкапсуляцию: уточнена формулировка
+           (направление оборачивания при отправке), скорректирован правильный ответ.
+    v1.0 — первый релиз: 42 вопроса, пул 10 случайных за тест,
+           перемешивание вариантов, разбор ошибок, глоссарий 47 терминов
+           по фазам, полный ответ на уровне пакетов (при 9+/10).
+-->
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Что происходит когда вводишь URL? — тест на уровне пакетов</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff;
+    --bg2: #f7f7f5;
+    --bg3: #f0efe9;
+    --text: #1a1a18;
+    --text2: #6b6b67;
+    --text3: #9b9b96;
+    --border: rgba(0,0,0,0.1);
+    --border2: rgba(0,0,0,0.18);
+    --radius: 10px;
+    --radius-sm: 7px;
+    --green-bg: #e1f5ee; --green-bg2: #9fe1cb; --green: #0f6e56; --green-mid: #1d9e75; --green-border: rgba(15,110,86,0.3);
+    --blue-bg: #e6f1fb; --blue-bg2: #b5d4f4; --blue: #185fa5; --blue-mid: #378add; --blue-border: rgba(24,95,165,0.3);
+    --purple-bg: #eeedfe; --purple-bg2: #cecbf6; --purple: #534ab7; --purple-mid: #7f77dd; --purple-border: rgba(83,74,183,0.3);
+    --amber-bg: #faeeda; --amber-bg2: #fac775; --amber: #854f0b; --amber-mid: #ef9f27; --amber-border: rgba(133,79,11,0.3);
+    --gray-bg: #f1efe8; --gray-bg2: #d3d1c7; --gray: #5f5e5a; --gray-mid: #888780; --gray-border: rgba(95,94,90,0.3);
+    --red-bg: #fcebeb; --red: #a32d2d; --red-border: rgba(163,45,45,0.3);
+    --success-bg: #eaf3de; --success: #3b6d11; --success-border: rgba(59,109,17,0.3);
+    --info-bg: #e6f1fb; --info: #185fa5; --info-border: rgba(24,95,165,0.3);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a; --bg2: #242422; --bg3: #2c2c2a;
+      --text: #f0efea; --text2: #a0a09a; --text3: #6b6b67;
+      --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.18);
+      --green-bg: #04342c; --green-bg2: #085041; --green: #9fe1cb; --green-mid: #5dcaa5; --green-border: rgba(29,158,117,0.3);
+      --blue-bg: #042c53; --blue-bg2: #0c447c; --blue: #b5d4f4; --blue-mid: #378add; --blue-border: rgba(55,138,221,0.3);
+      --purple-bg: #26215c; --purple-bg2: #3c3489; --purple: #cecbf6; --purple-mid: #7f77dd; --purple-border: rgba(127,119,221,0.3);
+      --amber-bg: #412402; --amber-bg2: #633806; --amber: #fac775; --amber-mid: #ef9f27; --amber-border: rgba(239,159,39,0.3);
+      --gray-bg: #2c2c2a; --gray-bg2: #444441; --gray: #d3d1c7; --gray-mid: #888780; --gray-border: rgba(180,178,169,0.3);
+      --red-bg: #501313; --red: #f09595; --red-border: rgba(240,149,149,0.3);
+      --success-bg: #173404; --success: #c0dd97; --success-border: rgba(99,153,34,0.3);
+      --info-bg: #042c53; --info: #b5d4f4; --info-border: rgba(55,138,221,0.3);
+    }
+  }
+  body { background: var(--bg3); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.6; min-height: 100vh; }
+  .page { max-width: 700px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  .header { margin-bottom: 2rem; }
+  .header h1 { font-size: 22px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .header p { font-size: 14px; color: var(--text2); }
+  .version-badge { display: inline-block; font-size: 11px; font-weight: 500; color: var(--text3); background: var(--bg2); border: 0.5px solid var(--border); border-radius: 20px; padding: 2px 9px; margin-top: 6px; letter-spacing: .03em; }
+  .progress-bar { height: 3px; background: var(--border); border-radius: 2px; margin-bottom: 1.5rem; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--blue-mid); border-radius: 2px; transition: width 0.4s ease; }
+  .card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
+  .q-meta { font-size: 12px; color: var(--text3); margin-bottom: 8px; letter-spacing: .04em; text-transform: uppercase; }
+  .q-text { font-size: 16px; font-weight: 500; color: var(--text); line-height: 1.55; margin-bottom: 1.25rem; }
+  .q-text code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; background: var(--bg2); padding: 2px 6px; border-radius: 4px; }
+  .options { display: flex; flex-direction: column; gap: 8px; }
+  .opt { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; border: 0.5px solid var(--border2); border-radius: var(--radius-sm); background: var(--bg); cursor: pointer; font-size: 14px; color: var(--text); text-align: left; line-height: 1.5; transition: background 0.15s, border-color 0.15s; width: 100%; }
+  .opt:hover:not(:disabled) { background: var(--bg2); border-color: var(--border2); }
+  .opt-letter { min-width: 22px; height: 22px; border-radius: 50%; border: 0.5px solid var(--border2); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; color: var(--text2); flex-shrink: 0; margin-top: 1px; }
+  .opt.correct { background: var(--success-bg); border-color: var(--success-border); }
+  .opt.correct .opt-letter { background: var(--success-bg); border-color: var(--success-border); color: var(--success); }
+  .opt.correct .opt-text { color: var(--success); }
+  .opt.wrong { background: var(--red-bg); border-color: var(--red-border); }
+  .opt.wrong .opt-letter { background: var(--red-bg); border-color: var(--red-border); color: var(--red); }
+  .opt.wrong .opt-text { color: var(--red); }
+  .opt.dimmed { opacity: 0.4; }
+  .opt:disabled { cursor: default; }
+  .exp { font-size: 13px; color: var(--text2); margin-top: 12px; padding: 10px 12px; background: var(--bg2); border-radius: var(--radius-sm); line-height: 1.65; display: none; }
+  .exp.show { display: block; }
+  .next-btn { margin-top: 1rem; padding: 9px 22px; border: 0.5px solid var(--border2); border-radius: var(--radius-sm); background: var(--bg); font-size: 14px; font-weight: 500; color: var(--text); cursor: pointer; transition: background 0.15s; display: none; }
+  .next-btn:hover { background: var(--bg2); }
+  /* result */
+  .result { display: none; }
+  .result.show { display: block; }
+  .score-wrap { text-align: center; margin-bottom: 1.75rem; }
+  .score-ring { width: 110px; height: 110px; margin: 0 auto 1rem; position: relative; }
+  .score-ring svg { transform: rotate(-90deg); }
+  .score-num { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 26px; font-weight: 600; color: var(--text); }
+  .result-title { font-size: 20px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .result-sub { font-size: 14px; color: var(--text2); }
+  .metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 1.5rem 0; }
+  .metric { background: var(--bg2); border-radius: var(--radius-sm); padding: 14px 10px; text-align: center; }
+  .metric-val { font-size: 24px; font-weight: 600; color: var(--text); }
+  .metric-lab { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .section-title { font-size: 16px; font-weight: 600; color: var(--text); margin: 2rem 0 1rem; padding-bottom: 8px; border-bottom: 0.5px solid var(--border); }
+  .section-sub { font-size: 13px; font-weight: 400; color: var(--text2); }
+  /* errors */
+  .err-card { border-radius: var(--radius); border: 0.5px solid var(--red-border); background: var(--bg); margin-bottom: 12px; overflow: hidden; }
+  .err-hd { padding: 10px 14px; background: var(--red-bg); display: flex; align-items: flex-start; gap: 8px; }
+  .err-n { font-size: 12px; font-weight: 600; color: var(--red); white-space: nowrap; padding-top: 1px; }
+  .err-q { font-size: 13px; font-weight: 500; color: var(--red); line-height: 1.5; }
+  .err-bd { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .err-row { display: flex; gap: 8px; font-size: 13px; line-height: 1.5; }
+  .err-lbl { font-size: 11px; font-weight: 600; min-width: 82px; text-transform: uppercase; letter-spacing: .04em; padding-top: 2px; }
+  .err-lbl.w { color: var(--red); }
+  .err-lbl.r { color: var(--success); }
+  .err-expl { font-size: 13px; color: var(--text2); line-height: 1.65; padding: 10px 12px; background: var(--bg2); border-radius: var(--radius-sm); }
+  .all-ok { padding: 14px 16px; background: var(--success-bg); border: 0.5px solid var(--success-border); border-radius: var(--radius-sm); font-size: 14px; color: var(--success); }
+  /* glossary */
+  .term-card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 8px; }
+  .term-card.new { border-color: var(--blue-border); }
+  .term-hd { padding: 12px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; user-select: none; }
+  .term-name { font-size: 14px; font-weight: 500; color: var(--text); }
+  .term-badges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+  .badge-gray { background: var(--bg2); color: var(--text2); }
+  .badge-new { background: var(--info-bg); color: var(--info); }
+  .chevron { color: var(--text3); font-size: 14px; transition: transform 0.2s; }
+  .term-bd { display: none; padding: 0 14px 14px; border-top: 0.5px solid var(--border); }
+  .term-bd.open { display: block; }
+  .term-text { font-size: 13px; color: var(--text2); line-height: 1.75; margin-top: 12px; }
+  .term-text strong { color: var(--text); font-weight: 500; }
+  .term-text code { font-family: 'SF Mono','Fira Code',monospace; font-size: 12px; background: var(--bg2); padding: 1px 5px; border-radius: 4px; color: var(--text); }
+  /* segment diagram */
+  .seg-diagram { margin-top: 14px; overflow-x: auto; }
+  .seg-table { border-collapse: collapse; width: 100%; min-width: 460px; font-family: 'SF Mono','Fira Code',monospace; font-size: 11px; }
+  .seg-table td { border: 0.5px solid var(--border2); padding: 7px 8px; text-align: center; background: var(--bg2); color: var(--text); line-height: 1.4; }
+  .seg-table td.payload { background: var(--bg); color: var(--text2); font-style: italic; font-family: -apple-system, sans-serif; font-size: 12px; }
+  .seg-table .sub { display: block; font-size: 10px; color: var(--text3); font-weight: 400; margin-top: 1px; }
+  .seg-caption { font-size: 11px; color: var(--text3); margin-top: 6px; text-align: center; }
+  /* timeline */
+  .timeline { display: flex; flex-direction: column; }
+  .tl-step { display: flex; gap: 0; }
+  .tl-left { display: flex; flex-direction: column; align-items: center; width: 36px; flex-shrink: 0; }
+  .tl-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0; z-index: 1; }
+  .tl-line { width: 2px; flex: 1; min-height: 12px; }
+  .tl-step:last-child .tl-line { display: none; }
+  .tl-right { padding: 0 0 22px 12px; flex: 1; min-width: 0; }
+  .tl-phase { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 2px; }
+  .tl-title { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 6px; line-height: 1.4; }
+  .tl-body { font-size: 13px; color: var(--text2); line-height: 1.7; }
+  .tl-body strong { color: var(--text); font-weight: 500; }
+  .tl-body code { font-family: 'SF Mono','Fira Code',monospace; font-size: 12px; background: var(--bg2); padding: 1px 5px; border-radius: 4px; color: var(--text); }
+  .pkt { margin-top: 8px; padding: 9px 11px; background: var(--bg2); border-radius: var(--radius-sm); font-family: 'SF Mono','Fira Code',monospace; font-size: 11px; color: var(--text2); line-height: 1.9; border-left: 2px solid; white-space: pre-wrap; word-break: break-all; }
+  .ph-dns .tl-dot { background: var(--green-bg); color: var(--green); }
+  .ph-dns .tl-line { background: var(--green-bg2); }
+  .ph-dns .tl-phase { color: var(--green); }
+  .ph-dns .pkt { border-color: var(--green-mid); }
+  .ph-tcp .tl-dot { background: var(--blue-bg); color: var(--blue); }
+  .ph-tcp .tl-line { background: var(--blue-bg2); }
+  .ph-tcp .tl-phase { color: var(--blue); }
+  .ph-tcp .pkt { border-color: var(--blue-mid); }
+  .ph-tls .tl-dot { background: var(--purple-bg); color: var(--purple); }
+  .ph-tls .tl-line { background: var(--purple-bg2); }
+  .ph-tls .tl-phase { color: var(--purple); }
+  .ph-tls .pkt { border-color: var(--purple-mid); }
+  .ph-http .tl-dot { background: var(--amber-bg); color: var(--amber); }
+  .ph-http .tl-line { background: var(--amber-bg2); }
+  .ph-http .tl-phase { color: var(--amber); }
+  .ph-http .pkt { border-color: var(--amber-mid); }
+  .ph-close .tl-dot { background: var(--gray-bg); color: var(--gray); }
+  .ph-close .tl-line { background: var(--gray-bg2); }
+  .ph-close .tl-phase { color: var(--gray); }
+  .ph-close .pkt { border-color: var(--gray-mid); }
+  .pkt-g { color: var(--green-mid); font-weight: 600; }
+  .pkt-b { color: var(--blue-mid); font-weight: 600; }
+  .pkt-p { color: var(--purple-mid); font-weight: 600; }
+  .pkt-a { color: var(--amber-mid); font-weight: 600; }
+  .pkt-gr { color: var(--gray-mid); font-weight: 600; }
+  .restart { margin-top: 2rem; text-align: center; }
+  .restart-btn { padding: 11px 28px; border: 0.5px solid var(--border2); border-radius: var(--radius-sm); background: var(--bg); font-size: 14px; font-weight: 500; color: var(--text); cursor: pointer; transition: background 0.15s; }
+  .restart-btn:hover { background: var(--bg2); }
+  .locked-block { border: 0.5px solid var(--border); border-radius: var(--radius); padding: 2rem 1.5rem; text-align: center; background: var(--bg); margin-bottom: 1rem; }
+  .locked-icon { font-size: 28px; margin-bottom: 10px; }
+  .locked-title { font-size: 15px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
+  .locked-sub { font-size: 13px; color: var(--text2); line-height: 1.6; }
+  /* phase groups in theory */
+  .phase-group { margin-bottom: 1.5rem; }
+  .phase-group-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .phase-dot { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  .phase-label { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  .phase-line { flex: 1; height: 0.5px; background: var(--border); }
+  .ph-g .phase-dot { background: var(--green-bg); color: var(--green); }
+  .ph-g .phase-label { color: var(--green); }
+  .ph-b .phase-dot { background: var(--blue-bg); color: var(--blue); }
+  .ph-b .phase-label { color: var(--blue); }
+  .ph-p .phase-dot { background: var(--purple-bg); color: var(--purple); }
+  .ph-p .phase-label { color: var(--purple); }
+  .ph-a .phase-dot { background: var(--amber-bg); color: var(--amber); }
+  .ph-a .phase-label { color: var(--amber); }
+  .ph-gr .phase-dot { background: var(--gray-bg); color: var(--gray); }
+  .ph-gr .phase-label { color: var(--gray); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <h1>Что происходит, когда вводишь URL?</h1>
+    <p>10 вопросов · уровень пакетов · без воды</p>
+    <p class="version-badge">v1.4</p>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" id="pf" style="width:0%"></div></div>
+  <div id="quiz-body"></div>
+  <div class="result" id="result"></div>
+</div>
+
+<script>
+const VERSION='v1.4';
+const QUIZ_SIZE=10;
+const POOL=[
+{q:"Пользователь вводит <code>https://example.com</code> и нажимает Enter. Что происходит первым, ещё до того как браузер открывает TCP-соединение?",opts:["Браузер отправляет HTTP GET запрос","Браузер резолвит доменное имя через DNS","Браузер устанавливает TLS-сессию","ОС проверяет локальный ARP-кеш"],ans:1,exp:"Прежде чем установить любое соединение, браузер должен знать IP-адрес сервера. Он проверяет кеш DNS (браузерный → /etc/hosts → системный резолвер). Если нет кеша — уходит DNS-запрос.",terms:["DNS","IP-адрес","ARP"]},
+{q:"Браузер отправляет DNS-запрос к рекурсивному резолверу. Какой протокол транспортного уровня используется по умолчанию и какой порт?",opts:["TCP, порт 53","UDP, порт 53","UDP, порт 443","TCP, порт 443"],ans:1,exp:"DNS по умолчанию работает поверх UDP на порту 53 — короткий запрос/ответ без установки соединения. TCP/53 используется только если ответ не умещается в 512 байт (например, при передаче зон или DNSSEC).",terms:["UDP","TCP","DNS","Порт"]},
+{q:"Рекурсивный резолвер не нашёл запись в кеше. Что он делает дальше?",opts:["Отправляет NXDOMAIN браузеру","Делает итеративный запрос к корневому DNS-серверу (root hints)","Форвардит запрос напрямую на example.com","Запрашивает BGP-таблицу для маршрута к домену"],ans:1,exp:"Рекурсивный резолвер идёт по иерархии: корневые серверы → TLD-серверы (.com) → авторитативный NS для example.com. Каждый шаг — отдельный UDP-пакет с вопросом и ответом «вот кто знает дальше».",terms:["DNS","Рекурсивный резолвер","NXDOMAIN","BGP","TLD","Корневые DNS-серверы"]},
+{q:"Теперь браузер знает IP-адрес сервера. Какой пакет летит по сети первым при установке TCP-соединения?",opts:["HTTP GET /","TLS ClientHello","TCP-сегмент с флагом SYN","TCP-сегмент с флагами SYN+ACK"],ans:2,exp:"TCP-рукопожатие: клиент отправляет SYN с начальным ISN (Initial Sequence Number). Сервер отвечает SYN-ACK, клиент завершает — ACK. Только после этого можно передавать данные.",terms:["TCP","TCP-сегмент","SYN","TLS ClientHello","ISN"]},
+{q:"Соединение по HTTPS. После TCP-рукопожатия браузер отправляет TLS ClientHello. Что входит в это сообщение?",opts:["Логин и пароль пользователя","Версия TLS, список поддерживаемых cipher suites и случайное число (client random)","Только IP-адрес и порт","Уже зашифрованный HTTP-запрос"],ans:1,exp:"ClientHello содержит: версию TLS (чаще всего 1.3), случайное 32-байт число, список cipher suites в порядке предпочтения, SNI (Server Name Indication) — чтобы сервер знал, для какого домена нужен сертификат.",terms:["TLS","TLS ClientHello","Cipher Suite","SNI","HTTPS"]},
+{q:"Сервер ответил HTTP 200 OK. Данные разбиты на несколько TCP-сегментов. Что гарантирует TCP, чего не гарантирует UDP?",opts:["Шифрование данных","Доставку всех сегментов в правильном порядке без потерь","Минимальную задержку (latency)","Фиксированный размер пакета"],ans:1,exp:"TCP гарантирует надёжную доставку (ACK на каждый сегмент, повтор при потере), порядок (sequence numbers) и контроль перегрузки. UDP — ни того, ни другого: быстро, но без гарантий.",terms:["TCP","TCP-сегмент","UDP","ACK","Sequence Number"]},
+{q:"Браузер получил всю страницу. Соединение нужно закрыть. Какая последовательность пакетов используется при нормальном закрытии TCP?",opts:["Один RST-пакет от клиента","Клиент → FIN, сервер → ACK, сервер → FIN, клиент → ACK","Клиент → FIN+ACK, сервер → FIN+ACK","Таймаут без пакетов"],ans:1,exp:"Graceful close: клиент FIN (закончил отправлять), сервер ACK, сервер FIN (тоже закончил), клиент ACK. Итого 4 пакета. RST — только аварийный разрыв. После клиентского FIN сервер ещё может досылать данные.",terms:["FIN","RST","ACK","TCP","TCP-сегмент"]},
+{q:"Что такое TTL в контексте DNS?",opts:["Время жизни IP-пакета в сети (в хопах)","Время в секундах, в течение которого DNS-запись может кешироваться","Тип записи DNS для IPv6-адресов","Номер версии DNS-протокола"],ans:1,exp:"В DNS TTL (Time To Live) — это число секунд, в течение которых резолвер или браузер могут кешировать ответ. По истечении TTL нужно сделать новый запрос. Не путать с TTL в IP-пакете (счётчик хопов).",terms:["DNS","Рекурсивный резолвер"]},
+{q:"Какой DNS-тип записи возвращает IPv6-адрес?",opts:["A","CNAME","AAAA","MX"],ans:2,exp:"Запись типа A возвращает IPv4-адрес (32 бита). Запись AAAA возвращает IPv6-адрес (128 бит). CNAME — псевдоним для другого имени. MX — почтовый сервер домена.",terms:["DNS"]},
+{q:"Чем отличается авторитативный DNS-сервер от рекурсивного резолвера?",opts:["Авторитативный использует TCP, рекурсивный — UDP","Авторитативный хранит реальные записи домена; рекурсивный собирает ответ из иерархии и кеширует","Авторитативный работает на порту 80","Авторитативный — это другое название корневого сервера"],ans:1,exp:"Авторитативный NS — конечная инстанция: именно он хранит A, AAAA, MX и другие записи конкретного домена. Рекурсивный резолвер — посредник: он обходит иерархию от корня до авторитативного NS и возвращает ответ клиенту, кешируя его по TTL.",terms:["DNS","Рекурсивный резолвер","Корневые DNS-серверы"]},
+{q:"Что произойдёт, если TCP-сегмент потеряется в сети?",opts:["Соединение сразу закрывается с RST","Данные будут потеряны навсегда (как в UDP)","Отправитель повторно пошлёт сегмент после истечения таймаута ретрансмиссии (RTO)","Получатель запрашивает данные через новый DNS-запрос"],ans:2,exp:"TCP отслеживает отправленные сегменты. Если ACK не пришёл в течение RTO (Retransmission Timeout), сегмент отправляется повторно. SACK позволяет точно указать, какие именно сегменты нужно переслать.",terms:["TCP","ACK","SACK","TCP-сегмент"]},
+{q:"Какой HTTP-статус-код сигнализирует о постоянном редиректе?",opts:["200","301","404","500"],ans:1,exp:"301 Moved Permanently — ресурс навсегда перемещён на новый URL. Браузер должен обновить закладку и впредь ходить по новому адресу. 302 — временный редирект. 200 — успех. 404 — не найдено. 500 — ошибка сервера.",terms:["HTTP","HTTP-статусы"]},
+{q:"Чем HTTP/2 принципиально отличается от HTTP/1.1 на уровне передачи данных?",opts:["HTTP/2 работает поверх UDP","HTTP/2 позволяет мультиплексировать несколько запросов в одном TCP-соединении","HTTP/2 не использует TLS","HTTP/2 не поддерживает заголовки запроса"],ans:1,exp:"HTTP/1.1 отправляет запросы последовательно (или через несколько соединений). HTTP/2 мультиплексирует потоки внутри одного TCP-соединения, использует бинарный протокол и сжатие заголовков (HPACK). Это устраняет head-of-line blocking на уровне HTTP.",terms:["HTTP","TCP"]},
+{q:"Что такое SNI и зачем он нужен в TLS?",opts:["Алгоритм шифрования трафика","Расширение TLS: клиент указывает имя домена в ClientHello, чтобы сервер выбрал правильный сертификат","Механизм сжатия TLS-трафика","Протокол для проверки отзыва сертификатов"],ans:1,exp:"Server Name Indication (SNI) — расширение в TLS ClientHello. Клиент указывает hostname ещё до шифрования. Это позволяет одному IP-адресу обслуживать несколько HTTPS-доменов с разными сертификатами. Без SNI сервер не знал бы, какой сертификат предъявить.",terms:["SNI","TLS ClientHello","HTTPS","TLS"]},
+{q:"Что произойдёт, если браузер попытается подключиться к порту, который не слушает ни одно приложение?",opts:["Сервер ответит HTTP 404","TCP-рукопожатие зависнет навсегда","Сервер немедленно ответит TCP RST","Браузер повторит попытку через 30 секунд"],ans:2,exp:"Если порт закрыт (нет приложения, слушающего), ОС сервера немедленно ответит TCP RST (Reset) на входящий SYN. Браузер получит ошибку «Connection refused». Зависание было бы возможно, если пакет отбрасывается брандмауэром без ответа (тогда — таймаут).",terms:["RST","TCP","Порт"]},
+{q:"Чем HTTPS отличается от HTTP на уровне пакетов?",opts:["HTTPS использует порт 8080 вместо 80","HTTPS добавляет TLS-рукопожатие после TCP; HTTP-данные передаются в зашифрованном виде внутри TLS Record","HTTPS использует UDP вместо TCP","HTTPS удваивает количество TCP-сегментов"],ans:1,exp:"HTTP работает на порту 80, данные передаются открытым текстом. HTTPS работает на порту 443: после TCP-рукопожатия происходит TLS-рукопожатие, после чего все HTTP-заголовки и тело передаются зашифрованными внутри TLS Application Data Record.",terms:["HTTPS","TLS","HTTP","TCP","Порт"]},
+{q:"Что такое QUIC и на каком транспортном протоколе он работает?",opts:["QUIC — расширение TCP для мультиплексирования","QUIC — протокол Google поверх UDP, реализующий надёжность и шифрование самостоятельно; используется в HTTP/3","QUIC — протокол поверх ICMP","QUIC — алгоритм сжатия HTTP-заголовков"],ans:1,exp:"QUIC разработан Google, стандартизирован как RFC 9000. Работает поверх UDP, самостоятельно реализует надёжность, мультиплексирование потоков, управление перегрузкой и встроенное TLS 1.3. Устраняет head-of-line blocking TCP. HTTP/3 работает исключительно поверх QUIC.",terms:["UDP","TCP","HTTP","TLS","QUIC"]},
+{q:"Какой флаг TCP говорит об аварийном разрыве соединения?",opts:["FIN","SYN","RST","PSH"],ans:2,exp:"RST (Reset) используется для немедленного разрыва соединения: при закрытом порте, ошибке состояния, брандмауэре. В отличие от FIN (graceful close), RST не требует подтверждения — соединение считается закрытым немедленно.",terms:["RST","FIN","SYN","TCP"]},
+{q:"Что именно шифрует TLS в HTTPS-соединении?",opts:["Только тело HTTP-ответа","Всё: HTTP-заголовки запроса и ответа, тело, cookies","Только URL и заголовки, но не тело","Ничего — шифрование происходит на уровне IP"],ans:1,exp:"TLS шифрует весь HTTP-обмен: метод, путь, все заголовки (включая Cookie и Authorization), тело запроса и ответа. Снаружи виден только IP-адрес сервера, порт 443 и SNI в ClientHello (до ECH). Сам URL остаётся виден в DNS-запросе и SNI.",terms:["TLS","HTTPS","SNI","HTTP"]},
+{q:"Что такое HSTS и как он передаётся?",opts:["HTTP-метод для безопасной передачи данных","HTTP-заголовок ответа Strict-Transport-Security: браузер запоминает, что этот домен — только HTTPS, и не делает HTTP-запросов","Алгоритм TLS-рукопожатия","Механизм DNS для перенаправления на HTTPS"],ans:1,exp:"HSTS (HTTP Strict Transport Security) — заголовок ответа сервера: <code>Strict-Transport-Security: max-age=31536000</code>. Браузер сохраняет это правило: следующие запросы к домену автоматически идут по HTTPS без HTTP-редиректа. Защищает от downgrade-атак.",terms:["HTTPS","HTTP","TLS","HSTS"]},
+{q:"Что такое NAT и как он влияет на TCP-пакеты?",opts:["NAT шифрует TCP-соединения","NAT заменяет IP-адреса и порты в заголовках пакетов: позволяет нескольким устройствам локальной сети выходить через один публичный IP","NAT добавляет дополнительный TCP-заголовок","NAT — это DNS-алиас для IP-адреса"],ans:1,exp:"NAT (Network Address Translation) на роутере: пакет из локальной сети (192.168.x.x) уходит с заменой src IP на публичный IP роутера и src Port на уникальный эфемерный порт. Роутер ведёт таблицу трансляций. Ответный пакет приходит к роутеру — он по таблице заменяет dst IP и Port обратно на адрес устройства.",terms:["IP-адрес","Порт","TCP","TCP-сегмент","NAT"]},
+{q:"Что такое keep-alive в HTTP/1.1?",opts:["Механизм проверки живости сервера через ICMP","Заголовок Connection: keep-alive — позволяет переиспользовать TCP-соединение для нескольких HTTP-запросов без повторного рукопожатия","Heartbeat-механизм TLS","Периодический DNS-запрос для обновления IP"],ans:1,exp:"В HTTP/1.0 каждый запрос открывал новое TCP-соединение. HTTP/1.1 ввёл persistent connections (keep-alive): одно TCP-соединение используется для нескольких запросов/ответов подряд, экономя 3-way handshake и TLS-рукопожатие на каждый ресурс страницы.",terms:["HTTP","TCP","TLS","Keep-Alive"]},
+{q:"Что такое Content-Encoding: gzip в HTTP-ответе?",opts:["Кодировка символов HTML-страницы","Сервер сжал тело ответа алгоритмом gzip; браузер должен распаковать перед использованием","Тип шифрования TLS","Формат передачи бинарных файлов"],ans:1,exp:"Content-Encoding указывает, как сжато тело ответа. <code>gzip</code> — алгоритм deflate с gzip-оберткой. Браузер сообщает поддерживаемые алгоритмы через <code>Accept-Encoding: gzip, deflate, br</code>. Сервер выбирает один и указывает его в <code>Content-Encoding</code>. Реальный размер тела при передаче меньше оригинального.",terms:["HTTP"]},
+{q:"Что будет, если DNS-запись имеет TTL=0?",opts:["Запись никогда не истечёт и будет кешироваться вечно","Запись не должна кешироваться вообще — каждый новый запрос должен идти к авторитативному NS","TTL=0 означает ошибку DNS","Запись удаляется через 0 секунд после создания"],ans:1,exp:"TTL=0 означает: не кешировать. Каждый DNS-запрос должен идти напрямую к авторитативному NS. Используется при частых изменениях IP (например, blue-green деплой или failover), чтобы изменения разошлись мгновенно. Минус — резко возрастает нагрузка на авторитативный DNS.",terms:["DNS","Рекурсивный резолвер"]},
+{q:"Что такое OCSP и зачем он нужен в HTTPS?",opts:["Протокол для сжатия TLS-трафика","Online Certificate Status Protocol — браузер проверяет у CA, не отозван ли сертификат сервера","Алгоритм выбора cipher suite","Механизм ускорения TLS-рукопожатия"],ans:1,exp:"OCSP (Online Certificate Status Protocol) — браузер отправляет запрос к CA (Certificate Authority) с серийным номером сертификата сервера. CA отвечает: good / revoked / unknown. Если сертификат отозван — браузер блокирует соединение. OCSP Stapling — сервер сам кешируя ответ CA и прикладывает его в TLS-рукопожатие.",terms:["HTTPS","TLS","TLS ClientHello","OCSP"]},
+{q:"Какой HTTP-метод идемпотентен по RFC?",opts:["POST","PATCH","GET","DELETE и GET, но не POST"],ans:3,exp:"Идемпотентность: многократный вызов даёт тот же результат, что и один. GET, HEAD, PUT, DELETE — идемпотентны. POST — нет (каждый вызов создаёт новый ресурс). PATCH — зависит от реализации, формально не идемпотентен. Это важно при повторе запроса после таймаута.",terms:["HTTP","HTTP-статусы"]},
+{q:"Какой HTTP-метод следует использовать для создания нового ресурса на сервере, когда URL ресурса определяет сам клиент?",opts:["POST","PUT","PATCH","GET"],ans:1,exp:"PUT создаёт или полностью заменяет ресурс по указанному клиентом URL. POST создаёт ресурс, но URL определяет сервер (возвращает в Location). PATCH — частичное обновление. Ключевое отличие: PUT идемпотентен (повтор даёт тот же результат), POST — нет.",terms:["HTTP","HTTP-методы"]},
+{q:"Что означает HTTP-статус 403 Forbidden?",opts:["Ресурс не найден","Сервер понял запрос, но отказывает в доступе — авторизация не поможет","Требуется аутентификация — нужно передать credentials","Внутренняя ошибка сервера"],ans:1,exp:"403 — сервер понял запрос и знает кто вы, но доступ запрещён (недостаточно прав). В отличие от 401 (Unauthorized), повторная аутентификация не поможет. Пример: обычный пользователь пытается открыть /admin. Для пентестера: 403 вместо 404 означает, что ресурс существует.",terms:["HTTP","HTTP-статусы"]},
+{q:"Что передаёт заголовок Authorization: Bearer в HTTP-запросе?",opts:["Зашифрованный пароль пользователя в Base64","Токен доступа (JWT или OAuth-токен) для аутентификации запроса","Название браузера и версию клиента","Cookie-сессию пользователя"],ans:1,exp:"Authorization: Bearer — стандартный заголовок для передачи токена доступа (RFC 6750). Сервер извлекает токен, верифицирует подпись (JWT) или ищет в базе (opaque token). Передаётся в каждом запросе к защищённым эндпоинтам. Для пентестера: перехвати токен — получишь доступ без логина.",terms:["HTTP","Заголовки HTTP","JWT","OAuth"]},
+{q:"Что такое CORS и какой заголовок сервер должен вернуть, чтобы разрешить запросы с другого домена?",opts:["CORS — шифрование запросов; нужен заголовок TLS-Certificate","CORS — политика браузера; сервер должен вернуть Access-Control-Allow-Origin с нужным доменом","CORS — кеширование статики; заголовок Cache-Control","CORS — сжатие ответа; заголовок Content-Encoding"],ans:1,exp:"CORS (Cross-Origin Resource Sharing) — браузер блокирует JS-запросы на чужой домен без явного разрешения. Сервер разрешает заголовком Access-Control-Allow-Origin: https://example.com (или *). Preflight OPTIONS-запрос проверяет разрешения перед реальным запросом. Ограничение только в браузере — curl не ограничен.",terms:["HTTP","CORS","Заголовки HTTP"]},
+{q:"Чем заголовок Content-Type: application/json отличается от Content-Type: application/x-www-form-urlencoded?",opts:["Только названием — данные передаются одинаково","application/json — тело в JSON; application/x-www-form-urlencoded — данные в виде key=value&key2=value2","application/json используется только для GET-запросов","application/x-www-form-urlencoded шифрует данные"],ans:1,exp:"Content-Type описывает формат тела запроса. application/json: {\"user\":\"admin\"} — тело в JSON. application/x-www-form-urlencoded: user=admin&pass=123 — плоский формат HTML-форм. Бэкенд парсит по-разному. Для пентестера: смена Content-Type иногда обходит WAF-фильтры.",terms:["HTTP","Заголовки HTTP","Content-Type"]},
+{q:"В чём ключевое отличие хранения сессии в cookie от JWT в localStorage?",opts:["Cookie работают только на HTTP, JWT — только на HTTPS","Cookie с флагом HttpOnly недоступны JS и автоотправляются браузером; JWT в localStorage читается любым JS на странице — уязвим к XSS","JWT в localStorage безопаснее — он зашифрован браузером","Cookie не поддерживают авторизацию, только идентификацию"],ans:1,exp:"Cookie с флагом HttpOnly недоступны JS → защита от XSS-кражи. Флаг Secure — только HTTPS. SameSite — защита от CSRF. JWT в localStorage читается любым JS → украден через XSS. Лучшая практика: хранить JWT в HttpOnly cookie — получаем оба плюса.",terms:["Cookie","JWT","Сессии","Заголовки HTTP"]},
+{q:"Что такое JWT и из каких частей он состоит?",opts:["Зашифрованный токен — расшифровать без ключа нельзя","Три Base64url-части через точку: Header.Payload.Signature — Payload читается без ключа, но нельзя подделать подпись","Бинарный токен в бинарном формате","Сессионный ключ, который хранится только на сервере"],ans:1,exp:"JWT (JSON Web Token) = Header.Payload.Signature. Header и Payload — просто Base64url, читаются без ключа (jwt.io). Signature — HMAC или RSA-подпись. Payload содержит claims: sub, exp, roles. Для пентестера: всегда декодируй JWT — там бывают роли, внутренние ID, иногда секреты.",terms:["JWT","Сессии","Cookie"]},
+{q:"Как работает OAuth 2.0 Authorization Code Flow?",opts:["Клиент передаёт логин/пароль напрямую в API","Браузер редиректит к OAuth-серверу → пользователь логинится → сервер редиректит обратно с code → приложение меняет code на access_token через POST","Сервер генерирует JWT и сразу отдаёт в cookie","OAuth работает на уровне DNS, не HTTP"],ans:1,exp:"Authorization Code Flow: 1) GET /authorize → редирект к IDP с client_id и redirect_uri; 2) пользователь логинится; 3) IDP редиректит на redirect_uri?code=xxx; 4) бэкенд POST /token с code + client_secret → access_token. code одноразовый, client_secret не светится в браузере.",terms:["OAuth","Сессии","HTTP","Заголовки HTTP"]},
+{q:"Где выполняется JavaScript, загруженный со страницы, и чем это отличается от серверного кода?",opts:["JS всегда выполняется на сервере, браузер только отображает результат","Клиентский JS выполняется в браузере и доступен в DevTools; серверный код выполняется на сервере и недоступен пользователю напрямую","JS на клиенте и сервере идентичен — разницы нет","Клиентский JS зашифрован и недоступен для просмотра"],ans:1,exp:"Клиентский JS — в браузере: весь код читается в DevTools → Sources. Там бывают: API-ключи, эндпоинты, токены, внутренние URL. Серверный код (Node.js, Python, PHP) — не доступен. Для пентестера: анализ JS-бандлов — первый шаг разведки на фронтенде.",terms:["JavaScript","Клиент-сервер"]},
+{q:"Как в DevTools найти все XHR/fetch-запросы, которые страница отправляет на сервер?",opts:["Elements → найти тег &lt;script&gt;","Network → фильтр Fetch/XHR — все AJAX-запросы видны с заголовками и телом","Console → вывести document.cookie","Sources → найти файл requests.js"],ans:1,exp:"DevTools → Network → Fetch/XHR показывает все асинхронные запросы: URL, метод, заголовки, тело. Это основной инструмент для изучения API: видны эндпоинты, токены в Authorization, параметры. Preview показывает распарсенный JSON ответа. Также полезно: правый клик на запросе → Copy as cURL.",terms:["JavaScript","Клиент-сервер","HTTP"]},
+{q:"Где в JS-коде фронтенда чаще всего находят захардкоженные API-ключи?",opts:["В HTML-тегах &lt;meta&gt;","В JS-бандлах (bundle.js, main.js), env-переменных вида REACT_APP_*, конфигах инициализации SDK","В CSS-файлах","В favicon.ico"],ans:1,exp:"React/Vue включают env-переменные в бандл при сборке: REACT_APP_API_KEY становится строкой в bundle.js. Ищи: apiKey, api_key, Bearer, secret, token, password в исходниках. Firebase, Stripe, Sentry часто инициализируются с ключами прямо в коде. Инструменты: trufflehog, semgrep, grep.",terms:["JavaScript","Клиент-сервер"]},
+{q:"Что такое CSRF-атака и как флаг SameSite на cookie защищает от неё?",opts:["CSRF — перехват cookie через XSS; SameSite шифрует cookie","CSRF — вредоносный сайт заставляет браузер жертвы отправить запрос от её имени; SameSite=Strict/Lax запрещает отправку cookie в кросс-сайтовых запросах","CSRF — атака на DNS-кеш; SameSite ограничивает TTL","CSRF — SQL-инъекция через cookie"],ans:1,exp:"CSRF: жертва залогинена на bank.com, открывает evil.com — браузер автоматически шлёт cookie к bank.com. SameSite=Strict: cookie не отправляются в кросс-сайтовых запросах совсем. SameSite=Lax: только top-level GET. SameSite=None: всегда (нужен Secure). Защита: CSRF-токен в теле + SameSite.",terms:["Cookie","Сессии","CORS"]},
+{q:"Когда браузер отправляет preflight OPTIONS-запрос?",opts:["Перед каждым HTTP-запросом","При кросс-origin запросах с нестандартными методами (PUT, DELETE) или заголовками (Authorization, Content-Type: application/json)","Только при работе с cookies","При каждом POST независимо от origin"],ans:1,exp:"Preflight нужен для non-simple CORS-запросов: метод не GET/POST/HEAD, или Content-Type не form/text/multipart, или есть кастомные заголовки (Authorization). Браузер шлёт OPTIONS → сервер отвечает Access-Control-Allow-Method/-Headers. Для пентестера: OPTIONS иногда возвращает разрешённые методы, которые не видны иначе.",terms:["CORS","HTTP","Заголовки HTTP"]},
+{q:"В чём разница между HTTP 401 и 403?",opts:["401 и 403 — синонимы, оба означают доступ запрещён","401 — не аутентифицирован (нужно передать credentials); 403 — аутентифицирован, но нет прав","401 — ошибка клиента, 403 — ошибка сервера","401 используется для API, 403 — только для веб-страниц"],ans:1,exp:"401 = кто вы? — credentials не переданы или неверны. Ответ содержит WWW-Authenticate. 403 = знаю кто вы, но нет — прав недостаточно. Для пентестера: 401 → пробуй разные credentials; 403 → ресурс существует, ищи privilege escalation или другой путь доступа.",terms:["HTTP","HTTP-статусы"]},
+{q:"Что находится в TCP SYN-пакете помимо флага SYN?",opts:["Данные HTTP-запроса","ISN клиента (Initial Sequence Number) и Window Size","TLS-сертификат сервера","DNS-ответ с IP сервера"],ans:1,exp:"В SYN: ISN (случайное 32-битное число для трекинга порядка байт), Window Size (размер буфера приёма), MSS (Maximum Segment Size), возможно — опции TCP (timestamp, SACK и др.). Данных ещё нет.",terms:["TCP-сегмент","ISN","Window Size","MSS","SACK","TCP"]},
+{q:"На каком уровне модели OSI работает IP-адрес, а на каком — MAC-адрес?",opts:["Оба на сетевом (Layer 3)","IP — Layer 3 (сетевой), MAC — Layer 2 (канальный)","IP — Layer 4, MAC — Layer 3","Оба на Layer 2"],ans:1,exp:"IP-адрес работает на Layer 3 (маршрутизация между сетями). MAC-адрес на Layer 2 (доставка внутри одного сегмента сети). Когда пакет проходит через роутеры, MAC меняется на каждом хопе, IP — нет.",terms:["Модель OSI","IP-адрес","MAC-адрес","Layer 2","Layer 3"]},
+{q:"Браузер формирует HTTP/1.1 GET запрос. В каком порядке сетевой стек ОС <strong>оборачивает</strong> данные заголовками перед отправкой в сеть?",opts:["HTTP → TCP-заголовок → IP-заголовок → Ethernet-фрейм","Ethernet-фрейм → IP-заголовок → TCP-заголовок → HTTP","IP-заголовок → HTTP → Ethernet-фрейм → TCP-заголовок","TCP-заголовок → Ethernet-фрейм → HTTP → IP-заголовок"],ans:0,exp:"При отправке каждый уровень добавляет свой заголовок поверх данных вышестоящего уровня: приложение формирует HTTP → TCP добавляет TCP-заголовок (сегмент) → IP добавляет IP-заголовок (пакет) → канальный уровень добавляет Ethernet-фрейм с MAC-адресами и CRC. По проводу летит готовый фрейм целиком.",terms:["Инкапсуляция","TCP-сегмент","HTTP","TCP","IP-адрес","Ethernet","Модель OSI"]},
+{q:"Какой размер заголовка IPv4 в типичном случае (без опций)?",opts:["8 байт","20 байт","40 байт","60 байт"],ans:1,exp:"Минимальный заголовок IPv4 — 20 байт: Version+IHL (1б), DSCP+ECN (1б), Total Length (2б), Identification (2б), Flags+Fragment Offset (2б), TTL (1б), Protocol (1б), Header Checksum (2б), Source IP (4б), Destination IP (4б).",terms:["IP-адрес","Модель OSI"]},
+{q:"Сколько байт занимает IPv4-адрес и IPv6-адрес?",opts:["IPv4 — 4 байта, IPv6 — 16 байт","IPv4 — 6 байт, IPv6 — 8 байт","IPv4 — 4 байта, IPv6 — 8 байт","IPv4 — 2 байта, IPv6 — 16 байт"],ans:0,exp:"IPv4-адрес — 32 бита = 4 байта, записывается в виде четырёх десятичных октетов (192.168.1.1). IPv6-адрес — 128 бит = 16 байт, записывается в виде восьми групп по 4 шестнадцатеричных цифры (2001:0db8::1).",terms:["IP-адрес","Модель OSI"]},
+{q:"Что такое Anycast и где он используется?",opts:["Передача пакета сразу всем хостам в сети (broadcast)","Один IP-адрес анонсируется из множества географических точек; BGP доставляет пакет в ближайшую точку","Технология балансировки на уровне HTTP","Алгоритм выбора DNS-записи при наличии нескольких A-записей"],ans:1,exp:"Anycast: один IP-адрес анонсируется в BGP из разных AS/PoP по всему миру. Маршрутизация BGP доставит пакет в ближайшую точку. Используется для корневых DNS-серверов (все 13 адресов — Anycast), CDN, Cloudflare, Google Public DNS (8.8.8.8).",terms:["BGP","DNS","IP-адрес","Корневые DNS-серверы","Anycast"]}
+];
+let activeQ=[];
+
+const G={
+"TCP-сегмент":{tag:"Транспортный уровень",phase:"tcp",isNew:true,body:`<strong>TCP-сегмент</strong> — единица данных транспортного уровня протокола TCP. Состоит из <strong>заголовка</strong> (минимум 20 байт) и <strong>полезных данных</strong> (payload до ~1460 байт при Ethernet).<br><br>Ключевые поля заголовка:<br>• <code>Source Port / Dest Port</code> — порты отправителя и получателя (16 бит каждый)<br>• <code>Sequence Number</code> — номер первого байта данных в этом сегменте (32 бита)<br>• <code>Acknowledgment Number</code> — следующий байт, который ожидает получатель (32 бита)<br>• <code>Flags</code> — SYN, ACK, FIN, RST, PSH, URG (по 1 биту каждый)<br>• <code>Window Size</code> — размер буфера приёма, управление потоком (16 бит)<br>• <code>Checksum</code> — контрольная сумма заголовка и данных (16 бит)<br>• <code>Options</code> — MSS, SACK, Timestamps и другие расширения<br><br>Если HTTP-ответ весит 10 КБ — TCP разбивает его примерно на 7 сегментов. Каждый летит отдельным IP-пакетом. Получатель собирает обратно по Sequence Number.`,diagram:true},
+"DNS":{tag:"Протокол",phase:"dns",body:"<strong>Domain Name System</strong> — система, которая переводит доменные имена в IP-адреса. Иерархична: корневые серверы → TLD (.com, .ru) → авторитативный NS конкретного домена. Запись <code>A</code> — IPv4, <code>AAAA</code> — IPv6, <code>CNAME</code> — псевдоним, <code>MX</code> — почта. У каждой записи есть TTL (время жизни кеша)."},
+"IP-адрес":{tag:"Сетевой уровень",phase:"dns",body:"<strong>Internet Protocol address</strong> — логический адрес устройства в сети. IPv4: 32 бита, вид <code>192.168.1.1</code>. IPv6: 128 бит. Определяет, куда маршрутизировать пакет между сетями. Роутер смотрит на IP dst, выбирает следующий хоп — и так пакет прыгает до цели."},
+"ARP":{tag:"Канальный уровень",phase:"dns",body:"<strong>Address Resolution Protocol</strong> — протокол, который находит MAC-адрес по IP внутри одного сегмента сети. Клиент бродкастит: «Кто имеет IP 192.168.1.1?». Владелец отвечает своим MAC. Без ARP нельзя собрать Ethernet-фрейм, даже зная IP назначения."},
+"UDP":{tag:"Транспортный уровень",phase:"dns",body:"<strong>User Datagram Protocol</strong> — протокол без установки соединения. Отправил — и забыл. Нет гарантий доставки, нет порядка, нет повторов. Зато быстро и с низкой задержкой. Используется там, где потери терпимы: DNS, видеостриминг, VoIP, онлайн-игры, QUIC. Заголовок всего 8 байт."},
+"TCP":{tag:"Транспортный уровень",phase:"tcp",body:"<strong>Transmission Control Protocol</strong> — надёжный протокол с установкой соединения. Гарантирует доставку (ACK + ретрансмит), порядок (sequence numbers), контроль перегрузки. Трёхэтапное рукопожатие: SYN→SYN-ACK→ACK. Закрытие — четырёхэтапное: FIN→ACK→FIN→ACK."},
+"Порт":{tag:"Транспортный уровень",phase:"dns",body:"<strong>Port</strong> — число от 0 до 65535, идентифицирующее конкретный процесс/службу на хосте. IP-адрес доставляет пакет на машину, порт — нужному приложению. Известные порты: <code>80</code> HTTP, <code>443</code> HTTPS, <code>53</code> DNS, <code>22</code> SSH."},
+"Рекурсивный резолвер":{tag:"DNS",phase:"dns",body:"<strong>Recursive resolver</strong> — DNS-сервер, который берёт на себя всю цепочку запросов за клиента. Клиент спрашивает раз — резолвер сам обходит корневые → TLD → авторитативный NS и возвращает готовый ответ. Кеширует ответы по TTL."},
+"NXDOMAIN":{tag:"DNS",phase:"dns",body:"<strong>Non-Existent Domain</strong> — ответ DNS, означающий что домен не существует. Код ошибки <code>RCODE=3</code>. Причины: опечатка в домене, домен истёк, DNS ещё не распространился после создания (propagation delay до 48 ч)."},
+"BGP":{tag:"Маршрутизация",phase:"dns",body:"<strong>Border Gateway Protocol</strong> — протокол маршрутизации между автономными системами (AS) в интернете. Определяет, по какому пути пакет идёт между провайдерами на глобальном уровне. Работает на TCP/179."},
+"TLD":{tag:"DNS",phase:"dns",body:"<strong>Top-Level Domain</strong> — домен верхнего уровня: <code>.com</code>, <code>.ru</code>, <code>.org</code>, <code>.io</code>. TLD-серверы знают, какой NS обслуживает каждый домен внутри зоны. Управляются ICANN."},
+"Корневые DNS-серверы":{tag:"DNS",phase:"dns",body:"<strong>Root name servers</strong> — 13 логических серверов (A–M root), физически распределённых через Anycast. Вершина иерархии DNS — знают только адреса TLD-серверов. Адреса зашиты в резолвер (root hints)."},
+"SYN":{tag:"TCP",phase:"tcp",body:"<strong>Synchronize</strong> — флаг в TCP-заголовке, открывающий соединение. Пакет SYN содержит ISN, Window Size, MSS. Сервер отвечает SYN-ACK со своим ISN. Клиент завершает рукопожатие ACK. Half-open SYN flood — вид DDoS-атаки."},
+"TLS ClientHello":{tag:"TLS/HTTPS",phase:"tls",body:"<strong>ClientHello</strong> — первое сообщение TLS-рукопожатия. Содержит: версию TLS (1.3), случайное число (32 байта), список cipher suites, расширения SNI и key_share (публичный ключ DH). В TLS 1.3 это сокращает рукопожатие до 1-RTT."},
+"ISN":{tag:"TCP",phase:"tcp",body:"<strong>Initial Sequence Number</strong> — случайное 32-битное число, с которого начинается нумерация байт TCP-потока. Нужно для синхронизации порядка данных и защиты от атак подстановки пакетов. Каждая сторона выбирает свой ISN независимо."},
+"Window Size":{tag:"TCP",phase:"tcp",body:"<strong>Window Size</strong> — размер приёмного буфера, который TCP-сторона готова принять без ACK. Управляет потоком данных: если буфер получателя заполнен, он уменьшает Window Size и отправитель притормаживает."},
+"MSS":{tag:"TCP",phase:"tcp",body:"<strong>Maximum Segment Size</strong> — максимальный размер полезных данных в одном TCP-сегменте. Обычно 1460 байт при Ethernet MTU 1500 (1500 − 20 IP − 20 TCP). Согласовывается при рукопожатии."},
+"SACK":{tag:"TCP",phase:"tcp",body:"<strong>Selective Acknowledgment</strong> — расширение TCP. Получатель подтверждает не только последовательный поток, а конкретные полученные блоки. При потере одного пакета из 10 пересылается только потерянный, а не всё подряд."},
+"TLS":{tag:"Безопасность",phase:"tls",body:"<strong>Transport Layer Security</strong> — протокол шифрования поверх TCP. Обеспечивает: конфиденциальность (AES-GCM), аутентификацию (сертификат X.509), целостность (AEAD). Версия TLS 1.3 — 1-RTT рукопожатие, убраны устаревшие алгоритмы."},
+"Cipher Suite":{tag:"TLS/HTTPS",phase:"tls",body:"<strong>Cipher suite</strong> — набор алгоритмов TLS-сессии. Пример: <code>TLS_AES_256_GCM_SHA384</code>. Клиент предлагает список, сервер выбирает один. В TLS 1.3 только AEAD-шифры, нет RSA key exchange."},
+"SNI":{tag:"TLS/HTTPS",phase:"tls",body:"<strong>Server Name Indication</strong> — расширение TLS: клиент в ClientHello указывает имя домена. Позволяет одному IP-адресу хостить несколько HTTPS-сайтов с разными сертификатами. SNI передаётся в открытом виде; ECH шифрует его."},
+"HTTPS":{tag:"Протокол",phase:"tls",body:"<strong>HyperText Transfer Protocol Secure</strong> — HTTP поверх TLS, порт 443. Браузер проверяет: 1) сертификат подписан доверенным CA; 2) имя совпадает с доменом; 3) сертификат не отозван (OCSP/CRL)."},
+"Модель OSI":{tag:"Архитектура",phase:"arch",body:"<strong>Open Systems Interconnection</strong> — 7-уровневая модель: L1 физический, L2 канальный (MAC), L3 сетевой (IP), L4 транспортный (TCP/UDP), L5-6-7 сеансовый/представления/прикладной (HTTP). На практике используют упрощённую модель TCP/IP (4 уровня)."},
+"MAC-адрес":{tag:"Канальный уровень",phase:"arch",body:"<strong>Media Access Control address</strong> — физический адрес интерфейса, 48 бит: <code>AA:BB:CC:DD:EE:FF</code>. Используется только внутри одного сегмента (L2). При каждом хопе через роутер MAC src/dst меняются на адреса роутера, IP — нет."},
+"Layer 2":{tag:"Модель OSI",phase:"arch",body:"<strong>Data Link Layer</strong> — L2 OSI. Передача между узлами в одном сегменте. Протоколы: Ethernet, Wi-Fi (802.11). Единица данных — фрейм (MAC src/dst + CRC). Коммутатор работает на L2."},
+"Layer 3":{tag:"Модель OSI",phase:"arch",body:"<strong>Network Layer</strong> — L3 OSI. Маршрутизация между сетями. Протоколы: IPv4, IPv6, ICMP, BGP. Единица данных — пакет. Роутер смотрит на IP dst и выбирает следующий хоп."},
+"Инкапсуляция":{tag:"Архитектура",phase:"arch",body:"<strong>Encapsulation</strong> — каждый уровень оборачивает данные выше своим заголовком: HTTP → TCP-заголовок (сегмент) → IP-заголовок (пакет) → Ethernet-фрейм. На приёмной стороне — обратный процесс (декапсуляция)."},
+"HTTP":{tag:"Прикладной уровень",phase:"http",body:"<strong>HyperText Transfer Protocol</strong> — основа веба, работает поверх TCP. Методы: GET, POST, PUT, DELETE. Статусы: 200 OK, 301 редирект, 404 не найден, 500 ошибка. HTTP/2 — мультиплексирование; HTTP/3 — поверх QUIC (UDP)."},
+"Ethernet":{tag:"Канальный уровень",phase:"arch",body:"<strong>Ethernet</strong> (IEEE 802.3) — технология проводных LAN. Фрейм: MAC dst (6 б) + MAC src (6 б) + EtherType (IPv4=0x0800) + данные (46–1500 б) + CRC-32. MTU = 1500 байт."},
+"ACK":{tag:"TCP",phase:"http",body:"<strong>Acknowledgment</strong> — флаг и поле TCP. ACK number = следующий байт, который ожидает получатель. Без ACK отправитель через таймаут повторяет сегмент. SACK позволяет подтверждать отдельные блоки, а не только последовательный поток."},
+"Sequence Number":{tag:"TCP",phase:"http",body:"<strong>Sequence Number</strong> — порядковый номер первого байта данных в TCP-сегменте. Начинается с ISN, монотонно растёт. Получатель использует для сборки данных в правильном порядке и обнаружения дублей."},
+"FIN":{tag:"TCP",phase:"close",body:"<strong>Finish</strong> — TCP-флаг завершения передачи. Каждая сторона закрывает своё направление отдельным FIN. Graceful close: FIN→ACK→FIN→ACK. После FIN сторона не может слать данные, но ещё может принимать."},
+"RST":{tag:"TCP",phase:"close",body:"<strong>Reset</strong> — TCP-флаг аварийного разрыва. RST немедленно обрывает соединение без четырёхэтапного закрытия. Причины: несуществующий порт, ошибка состояния, брандмауэр. Обе стороны сразу освобождают ресурсы."},
+"IP TTL":{tag:"Сетевой уровень",phase:"arch",body:"<strong>IP TTL (Time To Live)</strong> — поле в заголовке IP-пакета, 8 бит. Счётчик хопов: каждый роутер уменьшает значение на 1. При TTL=0 пакет отбрасывается, и роутер отправляет источнику ICMP Type 11 (Time Exceeded). Начальное значение обычно 64 или 128. Используется в traceroute: отправляются пакеты с TTL=1, 2, 3… — каждый роутер на пути отвечает ICMP-сообщением, раскрывая свой IP."},
+"MTU":{tag:"Канальный уровень",phase:"arch",body:"<strong>Maximum Transmission Unit</strong> — максимальный размер полезных данных одного фрейма на канальном уровне. Для Ethernet MTU = 1500 байт. Если IP-пакет превышает MTU промежуточного звена, происходит фрагментация (IPv4) или пакет отбрасывается с ICMP «Fragmentation Needed» (IPv6 и DF-бит). Связан с MSS: MSS = MTU − 20 (IP) − 20 (TCP) = 1460 байт."},
+"NAT":{tag:"Сетевой уровень",phase:"arch",body:"<strong>Network Address Translation</strong> — механизм трансляции адресов на роутере. Пакет из локальной сети (src: 192.168.x.x) уходит в интернет с заменой src IP на публичный IP роутера и src Port на уникальный эфемерный порт. Роутер ведёт NAT-таблицу трансляций. Обратный пакет приходит к роутеру — он по таблице восстанавливает dst IP и Port устройства. Позволяет тысячам устройств делить один публичный IP."},
+"QUIC":{tag:"Транспортный уровень",phase:"http",body:"<strong>QUIC</strong> (RFC 9000) — транспортный протокол поверх UDP, разработанный Google и стандартизированный IETF. Самостоятельно реализует: надёжную доставку, упорядоченность, мультиплексирование потоков, управление перегрузкой и встроенное TLS 1.3-шифрование. Устраняет head-of-line blocking TCP: потеря пакета в одном потоке не блокирует остальные. HTTP/3 работает исключительно поверх QUIC."},
+"HSTS":{tag:"Безопасность",phase:"tls",body:"<strong>HTTP Strict Transport Security</strong> — HTTP-заголовок ответа сервера: <code>Strict-Transport-Security: max-age=31536000; includeSubDomains</code>. Браузер запоминает, что домен работает только по HTTPS, и автоматически переходит на HTTPS даже если пользователь введёт http://. Защищает от SSL-stripping атак. HSTS Preload — домен включается в список браузера, зашитый в код."},
+"OCSP":{tag:"Безопасность",phase:"tls",body:"<strong>Online Certificate Status Protocol</strong> — протокол проверки статуса сертификата в реальном времени. Браузер отправляет запрос к OCSP-серверу CA с серийным номером сертификата; получает ответ: good / revoked / unknown. Если revoked — соединение блокируется. <strong>OCSP Stapling</strong>: сервер сам запрашивает и кеширует OCSP-ответ CA, прикладывая его в TLS-рукопожатие — браузеру не нужно делать отдельный запрос к CA."},
+"Anycast":{tag:"Маршрутизация",phase:"dns",body:"<strong>Anycast</strong> — метод адресации и маршрутизации: один IP-адрес анонсируется через BGP из множества географических точек одновременно. BGP доставит пакет в топологически ближайшую точку (по количеству AS-хопов). Используется для: корневых DNS-серверов (все 13 логических адресов — Anycast), CDN, Cloudflare, Google Public DNS (8.8.8.8). Обеспечивает низкую латентность и устойчивость к отказам."},
+"TIME_WAIT":{tag:"TCP",phase:"close",body:"<strong>TIME_WAIT</strong> — состояние TCP-соединения после отправки последнего ACK при graceful close. Клиент ждёт 2×MSL (Maximum Segment Lifetime, обычно 60–120 с) перед полным закрытием. Зачем: если сервер не получил финальный ACK и переотправит FIN, клиент ещё может ответить правильно. Предотвращает «призраков» — старые пакеты из закрытого соединения не попадут в новое на тех же портах."},
+"Slow Start":{tag:"TCP",phase:"http",body:"<strong>Slow Start</strong> — первая фаза алгоритма управления перегрузкой TCP (RFC 5681). После установки соединения congestion window (cwnd) начинается с 1–10 сегментов MSS и удваивается с каждым RTT (экспоненциальный рост). При достижении ssthresh или потере пакета переходит в фазу Congestion Avoidance (линейный рост). Цель — зондировать доступную пропускную способность, не перегружая сеть сразу."},
+"Keep-Alive":{tag:"HTTP",phase:"http",body:"<strong>HTTP Keep-Alive (persistent connections)</strong> — заголовок <code>Connection: keep-alive</code> в HTTP/1.1 позволяет переиспользовать одно TCP-соединение для нескольких HTTP-запросов/ответов подряд. В HTTP/1.0 каждый запрос требовал нового TCP (и TLS) рукопожатия. Keep-alive экономит 1–3 RTT на каждый запрос. В HTTP/2 keep-alive встроен по умолчанию через мультиплексирование потоков."},
+"HTTP-статусы":{tag:"Прикладной уровень",phase:"http",body:"<strong>HTTP Status Codes</strong> — трёхзначные коды ответа сервера. Группы: 1xx — информационные, 2xx — успех (<code>200 OK</code>, <code>201 Created</code>), 3xx — редиректы (<code>301</code> постоянный, <code>302</code> временный, <code>304</code> Not Modified), 4xx — ошибки клиента (<code>400</code> Bad Request, <code>401</code> Unauthorized, <code>403</code> Forbidden, <code>404</code> Not Found), 5xx — ошибки сервера (<code>500</code> Internal Server Error, <code>502</code> Bad Gateway, <code>503</code> Service Unavailable)."},
+"Traceroute":{tag:"Диагностика",phase:"arch",body:"<strong>Traceroute</strong> — сетевой инструмент для построения маршрута пакетов от источника до цели. Отправляет серию пакетов с последовательно увеличивающимся IP TTL: TTL=1 → первый роутер отвечает ICMP Time Exceeded, TTL=2 → второй и т.д. Так получают IP каждого промежуточного хопа и RTT до него. На Unix — <code>traceroute</code>, на Windows — <code>tracert</code>. Использует UDP (Unix) или ICMP Echo (Windows) как payload."},
+"Congestion Control":{tag:"TCP",phase:"http",body:"<strong>Congestion Control (управление перегрузкой)</strong> — механизм TCP для предотвращения перегрузки сети. Основные алгоритмы (RFC 5681, RFC 9002): <strong>Slow Start</strong> → экспоненциальный рост cwnd до ssthresh; <strong>Congestion Avoidance</strong> → линейный рост; <strong>Fast Retransmit</strong> → повтор при 3 дублирующих ACK без ожидания таймаута; <strong>Fast Recovery</strong> → половина cwnd вместо полного сброса. Современные алгоритмы: BBR, CUBIC."},
+"Window Scaling":{tag:"TCP",phase:"tcp",body:"<strong>Window Scaling (RFC 7323)</strong> — расширение TCP для увеличения эффективного размера приёмного окна. Базовое поле Window Size — 16 бит (максимум ~64 КБ). Window Scale option задаёт множитель (сдвиг до 14 бит), согласовываемый при SYN/SYN-ACK. Эффективное окно = Window Size × 2^scale, максимум ~1 ГБ. Критично для высоколатентных каналов (спутник, межконтинентальный WAN) — без масштабирования пропускная способность упирается в window size / RTT."},
+"HTTP-методы":{tag:"HTTP",phase:"http",body:"<strong>HTTP-методы (verbs)</strong> определяют семантику запроса. <strong>GET</strong> — получить ресурс, без тела, идемпотентен. <strong>POST</strong> — создать ресурс, URL определяет сервер, не идемпотентен. <strong>PUT</strong> — создать/заменить ресурс по указанному URL, идемпотентен. <strong>PATCH</strong> — частично обновить ресурс. <strong>DELETE</strong> — удалить ресурс, идемпотентен. <strong>HEAD</strong> — как GET, но без тела (проверить заголовки). <strong>OPTIONS</strong> — узнать разрешённые методы (используется в CORS preflight)."},
+"Заголовки HTTP":{tag:"HTTP",phase:"http",body:"<strong>HTTP Headers</strong> — метаданные запроса и ответа в формате <code>Name: Value</code>. Важные заголовки запроса: <code>Host</code> (домен), <code>Authorization</code> (токен/credentials), <code>Content-Type</code> (формат тела), <code>Cookie</code> (сессия), <code>User-Agent</code> (браузер), <code>Accept</code> (ожидаемый формат). Ответа: <code>Set-Cookie</code>, <code>Content-Type</code>, <code>Location</code> (редирект), <code>Access-Control-Allow-Origin</code> (CORS), <code>WWW-Authenticate</code> (при 401)."},
+"Content-Type":{tag:"HTTP",phase:"http",body:"<strong>Content-Type</strong> — заголовок, описывающий формат тела запроса или ответа. Частые значения: <code>application/json</code> — JSON-объект; <code>application/x-www-form-urlencoded</code> — плоские key=value формы; <code>multipart/form-data</code> — загрузка файлов; <code>text/html</code> — HTML-страница; <code>text/plain</code> — обычный текст. Сервер обязан вернуть Content-Type в ответе. Браузер использует его для парсинга, а не расширение файла."},
+"Cookie":{tag:"HTTP",phase:"http",body:"<strong>Cookie</strong> — небольшие данные (~4 КБ), которые сервер устанавливает через <code>Set-Cookie</code>, а браузер автоматически отправляет в каждом запросе. Атрибуты безопасности: <code>HttpOnly</code> — JS не может прочитать (защита от XSS); <code>Secure</code> — только HTTPS; <code>SameSite=Strict/Lax/None</code> — контроль отправки в кросс-сайтовых запросах (защита от CSRF); <code>Max-Age/Expires</code> — время жизни. Session cookie: без Max-Age, удаляется при закрытии браузера."},
+"Сессии":{tag:"Аутентификация",phase:"http",body:"<strong>Сессия</strong> — механизм хранения состояния между запросами (HTTP stateless). Три основных подхода: <strong>Cookie-сессия</strong>: сервер хранит данные в БД, клиенту выдаёт непрозрачный session_id в cookie. <strong>JWT</strong>: сервер подписывает токен с claims, хранит на клиенте — сервер stateless, но нельзя инвалидировать до истечения. <strong>OAuth-токен</strong>: access_token от стороннего IDP, refresh_token для обновления. Каждый подход — свои трейдоффы между безопасностью, масштабируемостью и сложностью."},
+"JWT":{tag:"Аутентификация",phase:"http",body:"<strong>JSON Web Token (RFC 7519)</strong> — компактный токен формата <code>Header.Payload.Signature</code>, разделённый точками. <strong>Header</strong>: алгоритм подписи (HS256, RS256). <strong>Payload</strong>: claims — sub (пользователь), exp (unix timestamp истечения), iat (время выдачи), roles и любые кастомные поля. <strong>Signature</strong>: HMAC или RSA-подпись. Header и Payload — Base64url, читаются без ключа. Signature защищает от подделки. Уязвимости: alg:none, слабый секрет, отсутствие проверки exp."},
+"OAuth":{tag:"Аутентификация",phase:"http",body:"<strong>OAuth 2.0 (RFC 6749)</strong> — фреймворк делегированной авторизации. Роли: Resource Owner (пользователь), Client (приложение), Authorization Server (IDP: Google, GitHub), Resource Server (API). Authorization Code Flow: редирект к IDP → логин → code → обмен code на access_token через POST с client_secret. <strong>access_token</strong>: краткоживущий (15 мин–1 ч). <strong>refresh_token</strong>: долгоживущий, используется для обновления. OpenID Connect добавляет id_token (JWT с данными пользователя) поверх OAuth."},
+"CORS":{tag:"HTTP",phase:"http",body:"<strong>Cross-Origin Resource Sharing</strong> — механизм браузера, реализующий same-origin policy. Браузер блокирует fetch/XHR с example.com к api.other.com без разрешения сервера. Сервер разрешает через заголовки: <code>Access-Control-Allow-Origin</code>, <code>Access-Control-Allow-Methods</code>, <code>Access-Control-Allow-Headers</code>, <code>Access-Control-Allow-Credentials</code>. <strong>Preflight</strong>: для non-simple запросов браузер сначала шлёт OPTIONS. Важно: ограничение только в браузере — curl, Postman, серверный код не ограничены CORS."},
+"JavaScript":{tag:"Клиент",phase:"http",body:"<strong>JavaScript в браузере</strong> выполняется в изолированной среде (sandbox): доступ к DOM, BOM (window, navigator), Web API (fetch, localStorage, WebSocket). Весь клиентский JS-код открыт в DevTools → Sources. Инструменты анализа: <code>Ctrl+Shift+F</code> — поиск по всем файлам; Beautify для минифицированного кода; Source Maps раскрывают оригинальный код. Для поиска секретов: ищи <code>apiKey</code>, <code>Bearer</code>, <code>secret</code>, <code>password</code>, <code>token</code>, <code>api_key</code>, URL вида <code>/api/v1/</code>, <code>graphql</code>."},
+"Клиент-сервер":{tag:"Архитектура",phase:"http",body:"<strong>Клиент-серверная архитектура</strong>: <strong>Клиент</strong> (браузер) — скачивает и выполняет HTML/CSS/JS, отображает интерфейс, делает запросы к API. Код виден пользователю. <strong>Сервер</strong> — обрабатывает запросы, работает с БД, выполняет бизнес-логику. Код недоступен клиенту напрямую. <strong>API</strong> — контракт между ними (REST, GraphQL, WebSocket). Для пентестера: клиентский код — разведка (эндпоинты, параметры, логика); серверный — цель атаки (инъекции, авторизация, бизнес-логика)."},
+};
+
+const TL=[
+{ph:"dns",n:"1",label:"Фаза 1 — DNS-резолюция",title:"Браузер узнаёт IP-адрес сервера",body:"Браузер ищет <strong>example.com</strong> в локальных кешах: браузерный → <code>/etc/hosts</code> → системный DNS-кеш. Если не нашёл — уходит UDP-датаграмма на рекурсивный резолвер (8.8.8.8), порт 53.",pkt:`<span class="pkt-g">→ Клиент</span>  UDP  src:192.168.1.5:49152  dst:8.8.8.8:53\n   [DNS Query]  QTYPE=A  QNAME=example.com\n\n<span class="pkt-g">← Резолвер</span>  UDP  src:8.8.8.8:53  dst:192.168.1.5:49152\n   [DNS Response]  example.com  A  93.184.216.34  TTL=3600`},
+{ph:"dns",n:"2",label:"Фаза 1 — DNS-резолюция",title:"Итеративный обход иерархии (если нет кеша)",body:"Резолвер сам обходит иерархию: Root → TLD (.com) → авторитативный NS. Три UDP-обмена. Браузер не видит этих пакетов.",pkt:`<span class="pkt-g">→ Резолвер</span>  UDP  dst:[a.root-servers.net]:53\n   [DNS Query]  QNAME=.  QTYPE=NS\n<span class="pkt-g">←</span> Ответ: NS для .com\n\n<span class="pkt-g">→ Резолвер</span>  UDP  dst:[a.gtld-servers.net]:53\n   [DNS Query]  QNAME=example.com  QTYPE=NS\n<span class="pkt-g">←</span> Ответ: NS для example.com\n\n<span class="pkt-g">→ Резолвер</span>  UDP  dst:[ns1.example.com]:53\n   [DNS Query]  QNAME=example.com  QTYPE=A\n<span class="pkt-g">←</span> Ответ: A  93.184.216.34`},
+{ph:"tcp",n:"3",label:"Фаза 2 — TCP-рукопожатие",title:"Три пакета для установки соединения",body:"TCP требует <strong>трёхэтапного рукопожатия</strong> перед передачей данных. Клиент выбирает случайный ISN. Сервер выбирает свой ISN. Без этого обмена данные не пойдут.",pkt:`<span class="pkt-b">→ SYN    </span>  TCP  src:49200  dst:443  [SYN]\n           Seq=1000  Win=65535  MSS=1460  SACK_PERM=1\n\n<span class="pkt-b">← SYN-ACK</span>  TCP  src:443   dst:49200  [SYN,ACK]\n           Seq=5000  Ack=1001  Win=28960  MSS=1460\n\n<span class="pkt-b">→ ACK    </span>  TCP  src:49200  dst:443  [ACK]\n           Seq=1001  Ack=5001  Win=65535`},
+{ph:"tls",n:"4",label:"Фаза 3 — TLS-рукопожатие",title:"ClientHello и согласование шифрования",body:"HTTPS требует TLS поверх TCP. Клиент шлёт <strong>ClientHello</strong> открытым текстом: версия TLS 1.3, cipher suites, случайное число, <strong>SNI</strong> и <strong>key_share</strong> (публичный ключ DH).",pkt:`<span class="pkt-p">→ ClientHello</span>  TLS 1.3  [Handshake]\n   Version: TLS 1.3\n   Random: 8f3a...c2d1 (32 bytes)\n   Cipher Suites: TLS_AES_256_GCM_SHA384,\n                  TLS_CHACHA20_POLY1305_SHA256\n   Extensions:\n     server_name: example.com  (SNI)\n     key_share: x25519 pubkey`},
+{ph:"tls",n:"5",label:"Фаза 3 — TLS-рукопожатие",title:"ServerHello, сертификат и Finished",body:"Сервер выбирает cipher suite, шлёт свой key_share. Стороны вычисляют общий секрет (ECDH). С этого момента всё шифруется. Сервер шлёт сертификат X.509 и Finished. Клиент проверяет сертификат, шлёт Finished.",pkt:`<span class="pkt-p">← ServerHello</span>  TLS 1.3\n   Chosen: TLS_AES_256_GCM_SHA384\n   key_share: x25519 pubkey\n\n<span class="pkt-p">← Certificate </span>  [зашифровано]\n   CN=example.com  Issuer=DigiCert\n   Valid: 2024-01-01 – 2025-01-01\n\n<span class="pkt-p">← Finished    </span>  [зашифровано, HMAC]\n<span class="pkt-p">→ Finished    </span>  [зашифровано, HMAC]`},
+{ph:"http",n:"6",label:"Фаза 4 — HTTP-запрос",title:"GET-запрос летит по проводу (зашифрован)",body:"TLS-туннель установлен. Снаружи виден только IP-пакет с зашифрованным payload. Внутри TLS-record — HTTP-заголовки.",pkt:`<span class="pkt-a">→ [TLS Record]</span>  Application Data  (зашифровано)\n   Внутри:\n   GET / HTTP/1.1\n   Host: example.com\n   User-Agent: Mozilla/5.0 ...\n   Accept: text/html,application/xhtml+xml\n   Accept-Encoding: gzip, deflate, br\n   Connection: keep-alive`},
+{ph:"http",n:"7",label:"Фаза 4 — HTTP-ответ",title:"Сервер возвращает страницу по частям",body:"Сервер шлёт <strong>HTTP 200 OK</strong>. Тело разбивается на TCP-сегменты по ~1460 байт (MSS). На каждые несколько сегментов клиент отвечает <strong>ACK</strong>. Потеря сегмента → TCP запрашивает повтор.",pkt:`<span class="pkt-a">← [TLS Record]</span>  Application Data  (зашифровано)\n   Внутри:\n   HTTP/1.1 200 OK\n   Content-Type: text/html; charset=UTF-8\n   Content-Encoding: gzip\n   Content-Length: 648\n   [тело страницы, сегмент 1/N]\n\n<span class="pkt-b">→ ACK</span>  Seq=1350  Ack=2921  Win=65535`},
+{ph:"close",n:"8",label:"Фаза 5 — Закрытие соединения",title:"Четыре пакета для graceful close",body:"Каждая сторона закрывает своё направление флагом <strong>FIN</strong>. Итого 4 пакета. Клиент ждёт 2×MSL в состоянии TIME_WAIT — на случай потерь.",pkt:`<span class="pkt-gr">→ FIN+ACK</span>  TCP  src:49200  dst:443  [FIN,ACK]\n           Seq=1350  Ack=2921\n\n<span class="pkt-gr">← ACK    </span>  TCP  src:443   dst:49200  [ACK]\n           Seq=2921  Ack=1351\n\n<span class="pkt-gr">← FIN+ACK</span>  TCP  src:443   dst:49200  [FIN,ACK]\n           Seq=2921  Ack=1351\n\n<span class="pkt-gr">→ ACK    </span>  TCP  src:49200  dst:443  [ACK]\n           Seq=1351  Ack=2922\n           → TIME_WAIT`},
+];
+
+let cur=0, score=0, answered=[], shuffled=[], _answered=false;
+
+function shuffle(arr){
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+function buildShuffled(){
+  activeQ=shuffle(POOL).slice(0,QUIZ_SIZE);
+  shuffled=activeQ.map(q=>{
+    const indices=shuffle([0,1,2,3]);
+    const opts=indices.map(i=>q.opts[i]);
+    const ans=indices.indexOf(q.ans);
+    return {opts,ans};
+  });
+}
+
+function render(){
+  _answered=false;
+  if(cur>=activeQ.length){showResult();return;}
+  const q=activeQ[cur];
+  const s=shuffled[cur];
+  document.getElementById('pf').style.width=(cur/activeQ.length*100)+'%';
+  document.getElementById('quiz-body').innerHTML=`
+    <div class="card">
+      <div class="q-meta">Вопрос ${cur+1} из ${activeQ.length}</div>
+      <div class="q-text">${q.q}</div>
+      <div class="options" id="opts">
+        ${s.opts.map((o,i)=>`
+        <button class="opt" onclick="choose(${i})">
+          <span class="opt-letter">${'ABCD'[i]}</span>
+          <span class="opt-text">${o}</span>
+        </button>`).join('')}
+      </div>
+      <div class="exp" id="exp">${q.exp}</div>
+    </div>
+    <button class="next-btn" id="nb" onclick="next()">${cur===activeQ.length-1?'Смотреть результат →':'Следующий вопрос →'}</button>`;
+}
+
+function choose(i){
+  const s=shuffled[cur];
+  document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
+  const ok=s.ans===i;
+  if(ok)score++;
+  answered.push({idx:cur,chosen:i,correct:ok});
+  document.querySelectorAll('.opt').forEach((b,idx)=>{
+    if(idx===s.ans)b.classList.add('correct');
+    else if(idx===i&&!ok)b.classList.add('wrong');
+    else b.classList.add('dimmed');
+  });
+  document.getElementById('exp').classList.add('show');
+  document.getElementById('nb').style.display='inline-block';
+}
+
+function next(){cur++;render();}
+
+function segDiagram(){
+  return `<div class="seg-diagram">
+    <table class="seg-table">
+      <tr>
+        <td style="width:22%"><strong>Src Port</strong><span class="sub">16 бит</span></td>
+        <td style="width:22%"><strong>Dst Port</strong><span class="sub">16 бит</span></td>
+        <td><strong>Sequence Number</strong><span class="sub">32 бита</span></td>
+      </tr>
+      <tr>
+        <td colspan="2"><strong>Acknowledgment Number</strong><span class="sub">32 бита</span></td>
+        <td style="width:22%"><strong>Flags</strong><span class="sub">SYN ACK FIN RST…</span></td>
+      </tr>
+      <tr>
+        <td><strong>Window Size</strong><span class="sub">16 бит</span></td>
+        <td><strong>Checksum</strong><span class="sub">16 бит</span></td>
+        <td><strong>Options</strong><span class="sub">MSS, SACK, TS…</span></td>
+      </tr>
+      <tr>
+        <td colspan="3" class="payload">Payload — данные приложения (HTTP, TLS…) · до ~1460 байт</td>
+      </tr>
+    </table>
+    <div class="seg-caption">Структура TCP-сегмента · заголовок минимум 20 байт</div>
+  </div>`;
+}
+
+function collectTerms(){
+  const s=new Set(['TCP-сегмент']);
+  answered.forEach(a=>{if(!a.correct)activeQ[a.idx].terms.forEach(t=>s.add(t));});
+  if(s.size===1)activeQ.forEach(q=>q.terms.forEach(t=>s.add(t)));
+  return [...s];
+}
+
+function buildTheory(terms){
+  // Group terms by phase order
+  const phaseOrder=['dns','tcp','tls','http','close','arch'];
+  const groups={};
+  phaseOrder.forEach(p=>groups[p]=[]);
+  terms.forEach(t=>{
+    const g=G[t];
+    if(!g)return;
+    const ph=g.phase||'arch';
+    if(!groups[ph])groups[ph]=[];
+    groups[ph].push(t);
+  });
+
+  const phMeta={
+    dns: {cls:'ph-g',  dot:'1', label:'Фаза 1 — DNS-резолюция'},
+    tcp: {cls:'ph-b',  dot:'2', label:'Фаза 2 — TCP-рукопожатие'},
+    tls: {cls:'ph-p',  dot:'3', label:'Фаза 3 — TLS-рукопожатие'},
+    http:{cls:'ph-a',  dot:'4', label:'Фаза 4 — HTTP-обмен'},
+    close:{cls:'ph-gr',dot:'5', label:'Фаза 5 — Закрытие соединения'},
+    arch:{cls:'ph-gr', dot:'∗', label:'Основы — модель и инкапсуляция'},
+  };
+
+  return phaseOrder.filter(ph=>groups[ph].length>0).map(ph=>{
+    const m=phMeta[ph];
+    const cards=groups[ph].map(t=>{
+      const g=G[t];
+      return `<div class="term-card${g.isNew?' new':''}">
+        <div class="term-hd" onclick="toggleTerm(this)">
+          <span class="term-name">${t}</span>
+          <span class="term-badges">
+            ${g.isNew?'<span class="badge badge-new">новое</span>':''}
+            <span class="badge badge-gray">${g.tag}</span>
+            <span class="chevron">▾</span>
+          </span>
+        </div>
+        <div class="term-bd${g.isNew?' open':''}">
+          <div class="term-text">${g.body}</div>
+          ${g.diagram?segDiagram():''}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="phase-group ${m.cls}">
+      <div class="phase-group-hd">
+        <div class="phase-dot">${m.dot}</div>
+        <span class="phase-label">${m.label}</span>
+        <div class="phase-line"></div>
+      </div>
+      ${cards}
+    </div>`;
+  }).join('');
+}
+
+function buildTimeline(){
+  return TL.map(s=>`
+  <div class="tl-step ph-${s.ph}">
+    <div class="tl-left">
+      <div class="tl-dot">${s.n}</div>
+      <div class="tl-line"></div>
+    </div>
+    <div class="tl-right">
+      <div class="tl-phase">${s.label}</div>
+      <div class="tl-title">${s.title}</div>
+      <div class="tl-body">${s.body}
+        <div class="pkt">${s.pkt}</div>
+      </div>
+    </div>
+  </div>`).join('');
+}
+
+function showResult(){
+  document.getElementById('quiz-body').innerHTML='';
+  document.getElementById('pf').style.width='100%';
+  const r=score/activeQ.length;
+  const pct=Math.round(r*100);
+  const color=r>=0.8?'#1d9e75':r>=0.5?'#ef9f27':'#e24b4a';
+  const msg=r>=0.9?['Мастер пакетов','Ты знаешь стек наизусть. OSI Model тобой гордится.']:r>=0.7?['Хороший результат','Пара слепых пятен, но базу держишь крепко.']:r>=0.5?['Есть над чем поработать','TCP/IP заслуживает отдельного погружения.']:['Стоит перечитать','Wireshark и tcpdump покажут, что летит по проводу.'];
+  const circ=2*Math.PI*40;
+  const dash=circ*(1-r);
+  const errors=answered.filter(a=>!a.correct);
+  const errHtml=errors.length===0
+    ?`<div class="all-ok">✓ Все ответы верны — разбор ошибок не нужен.</div>`
+    :errors.map(a=>{const q=activeQ[a.idx];const s=shuffled[a.idx];return`<div class="err-card">
+      <div class="err-hd"><span class="err-n">Вопрос ${a.idx+1}</span><span class="err-q">${q.q}</span></div>
+      <div class="err-bd">
+        <div class="err-row"><span class="err-lbl w">Ваш ответ</span><span>${s.opts[a.chosen]}</span></div>
+        <div class="err-row"><span class="err-lbl r">Верный</span><span>${s.opts[s.ans]}</span></div>
+        <div class="err-expl">${q.exp}</div>
+      </div>
+    </div>`;}).join('');
+  const terms=collectTerms();
+  const theoryNote=errors.length===0?'все термины из теста':'термины из вопросов с ошибками';
+  const res=document.getElementById('result');
+  res.innerHTML=`
+    <div class="score-wrap">
+      <div class="score-ring">
+        <svg width="110" height="110" viewBox="0 0 110 110">
+          <circle cx="55" cy="55" r="40" fill="none" stroke="var(--border2)" stroke-width="5"/>
+          <circle cx="55" cy="55" r="40" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round"
+            stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${dash.toFixed(1)}" style="transition:stroke-dashoffset 1s ease"/>
+        </svg>
+        <div class="score-num">${score}/10</div>
+      </div>
+      <div class="result-title">${msg[0]}</div>
+      <div class="result-sub">${msg[1]}</div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-val">${score}</div><div class="metric-lab">правильных</div></div>
+        <div class="metric"><div class="metric-val">${activeQ.length-score}</div><div class="metric-lab">ошибок</div></div>
+        <div class="metric"><div class="metric-val">${pct}%</div><div class="metric-lab">результат</div></div>
+      </div>
+    </div>
+    <div class="section-title">Разбор ошибок</div>
+    ${errHtml}
+    <div class="section-title">Теория по терминам <span class="section-sub">— ${theoryNote}</span></div>
+    <div id="theory">${buildTheory(terms)}</div>
+    ${score>=9
+      ? `<div class="section-title">Полный ответ на уровне пакетов <span class="section-sub">— что летит по проводу</span></div>
+    <div class="timeline">${buildTimeline()}</div>`
+      : `<div class="locked-block">
+      <div class="locked-icon">🔒</div>
+      <div class="locked-title">Полный ответ на уровне пакетов</div>
+      <div class="locked-sub">Что конкретно летит по проводу — откроется при результате 9/10 или выше. Сейчас у тебя ${score}/10.</div>
+    </div>`}
+    <div class="restart">
+      <button class="restart-btn" onclick="restart()">↺ Пройти заново</button>
+    </div>`;
+  res.classList.add('show');
+}
+
+function toggleTerm(hd){
+  const bd=hd.nextElementSibling;
+  const ch=hd.querySelector('.chevron');
+  const open=bd.classList.toggle('open');
+  ch.style.transform=open?'rotate(180deg)':'';
+}
+
+function restart(){
+  cur=0;score=0;answered=[];_answered=false;
+  buildShuffled();
+  document.getElementById('result').classList.remove('show');
+  document.getElementById('result').innerHTML='';
+  document.getElementById('pf').style.width='0%';
+  render();
+}
+
+buildShuffled();
+render();
+</script>
+</body>
+</html>
